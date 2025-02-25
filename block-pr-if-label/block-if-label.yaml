@@ -1,0 +1,19 @@
+name: "Check PR Label"
+
+on:
+  workflow_call:
+    inputs:
+      label:
+        description: "The label name that should block the PR"
+        required: true
+        type: string
+
+jobs:
+  fail-if-label-exists:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if PR has the label
+        if: contains(github.event.pull_request.labels.*.name, inputs.label) && contains(fromJson('["opened", "labeled", "unlabeled"]'), github.event.action)
+        run: |
+          echo "This PR has the label '${{ inputs.label }}'. Merge is blocked."
+          exit 1
