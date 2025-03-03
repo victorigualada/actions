@@ -15,8 +15,8 @@ jobs:
       - name: Check if PR has the label
         if: contains(fromJson('["opened", "labeled", "unlabeled"]'), github.event.action)
         run: |
-        LABELS=$(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH")
-        if echo "$LABELS" | grep -q "${{ inputs.label }}"; then
-          echo "This PR has the label '${{ inputs.label }}'. Merge is blocked."
-          exit 1
-        fi
+          LABELS=$(jq -r '.pull_request.labels[].name' "$GITHUB_EVENT_PATH")
+          if echo "$LABELS" | grep -q "${{ inputs.label }}"; then
+            echo "This PR has the label '${{ inputs.label }}'. Merge is blocked."
+            exit 1
+          fi
