@@ -31,8 +31,8 @@ jobs:
         run: |
           echo "Checking for non-PR items..."
           while IFS= read -r ITEM; do
-            if [[ ! "$ITEM" =~ ^#[0-9]+$ ]]; then
-              echo "❌ Required change is checked but is not a PR: '$ITEM'"
+            if [[ ! "$ITEM" =~ ^(https://github\.com/[^/]+/[^/]+/pull/|#[0-9]+)$ ]]; then
+              echo "❌ Required change is checked but is not a valid PR reference: '$ITEM'"
               exit 1
             fi
           done <<< "$CHECKED_ITEMS"
@@ -42,17 +42,22 @@ jobs:
         run: |
           echo "Checking if PRs are merged..."
           while IFS= read -r ITEM; do
-            if [[ "$ITEM" =~ ^#[0-9]+$ ]]; then
-              PR_NUMBER=${ITEM//#/}
-              echo "Checking PR #$PR_NUMBER..."
-              MERGED=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                -H "Accept: application/vnd.github.v3+json" \
-                "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | jq -r '.merged')
+            # If the item is a full PR link, extract the PR number
+            if [[ "$ITEM" =~ ^https://github\.com/[^/]+/[^/]+/pull/([0-9]+)$ ]]; then
+              PR_NUMBER="${BASH_REMATCH[1]}"
+            # If it's just a PR number (e.g., #123), use it directly
+            elif [[ "$ITEM" =~ ^#[0-9]+$ ]]; then
+              PR_NUMBER="${ITEM//#/}"
+            fi
 
-              if [[ "$MERGED" != "true" ]]; then
-                echo "❌ PR #$PR_NUMBER is not merged. Required changes are incomplete."
-                exit 1
-              fi
+            echo "Checking PR #$PR_NUMBER..."
+            MERGED=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | jq -r '.merged')
+
+            if [[ "$MERGED" != "true" ]]; then
+              echo "❌ PR #$PR_NUMBER is not merged. Required changes are incomplete."
+              exit 1
             fi
           done <<< "$CHECKED_ITEMS"
 
