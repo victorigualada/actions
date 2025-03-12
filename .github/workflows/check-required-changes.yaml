@@ -6,17 +6,53 @@ on:
       pr_description:
         description: "Pull request description"
         required: true
-        type: string
 
 jobs:
   check-pr-description:
     runs-on: ubuntu-latest
     steps:
-      - name: Check for checked boxes under '## Required changes'
+      - name: Extract checked required changes
+        id: extract_checked
         run: |
-          if echo "${{ inputs.pr_description }}" | awk '/## Required changes/{flag=1; next} /^##/{flag=0} flag' | grep -q '\[x\]'; then
-            echo "❌ PR contains checked required changes. Please address them before merging."
-            exit 1
-          else
+          echo "Extracting checked required changes..."
+          CHECKED_ITEMS=$(echo "${{ inputs.pr_description }}" | awk '/## Required changes/{flag=1; next} /^##/{flag=0} flag' | grep '^\s*- \[x\] ' | sed 's/- \[x\] //')
+
+          if [[ -z "$CHECKED_ITEMS" ]]; then
             echo "✅ No checked required changes found."
+            exit 0
           fi
+
+          echo "CHECKED_ITEMS<<EOF" >> $GITHUB_ENV
+          echo "$CHECKED_ITEMS" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Check for non-PR required changes
+        run: |
+          echo "Checking for non-PR items..."
+          while IFS= read -r ITEM; do
+            if [[ ! "$ITEM" =~ ^#[0-9]+$ ]]; then
+              echo "❌ Required change is checked but is not a PR: '$ITEM'"
+              exit 1
+            fi
+          done <<< "$CHECKED_ITEMS"
+
+      - name: Check if required PRs are merged
+        if: success()
+        run: |
+          echo "Checking if PRs are merged..."
+          while IFS= read -r ITEM; do
+            if [[ "$ITEM" =~ ^#[0-9]+$ ]]; then
+              PR_NUMBER=${ITEM//#/}
+              echo "Checking PR #$PR_NUMBER..."
+              MERGED=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" | jq -r '.merged')
+
+              if [[ "$MERGED" != "true" ]]; then
+                echo "❌ PR #$PR_NUMBER is not merged. Required changes are incomplete."
+                exit 1
+              fi
+            fi
+          done <<< "$CHECKED_ITEMS"
+
+          echo "✅ All required PRs are merged."
