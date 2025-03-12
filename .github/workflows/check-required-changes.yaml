@@ -6,6 +6,7 @@ on:
       pr_description:
         description: "Pull request description"
         required: true
+        type: string
 
 jobs:
   check-pr-description:
